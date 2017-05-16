@@ -44,10 +44,13 @@ fn main() {
   sink.append(source.repeat_infinite());
   sink.set_volume(0.8);
 
-  let display = glium::glutin::WindowBuilder::new()
+  let mut display = glium::glutin::WindowBuilder::new()
     .with_dimensions(WIDTH, HEIGHT)
-    .with_title("Tetra Master")
-    .with_multisampling(4)
+    .with_title("Tetra Master");
+
+  #[cfg(not(windows))]
+  { display = display.with_multisampling(4); }
+  let display = display
     .build_glium()
     .unwrap();
 
