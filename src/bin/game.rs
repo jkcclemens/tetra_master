@@ -121,29 +121,32 @@ fn main() {
     }
 
     if !is_player_turn {
-      is_player_turn = true;
-      if opponent_hand.is_empty() {
-        continue;
-      }
-      let i = thread_rng().gen_range(0, opponent_hand.len());
-      let card = opponent_hand.remove(i);
-      let mut empty = Vec::new();
-      for r in 0..4 {
-        for c in 0..4 {
-          if let Space::Empty = *board.space(r + 1, c + 1) {
-            empty.push((r, c));
+      let mut do_opponent_turn = || {
+        is_player_turn = true;
+        if opponent_hand.is_empty() {
+          return;
+        }
+        let i = thread_rng().gen_range(0, opponent_hand.len());
+        let card = opponent_hand.remove(i);
+        let mut empty = Vec::new();
+        for r in 0..4 {
+          for c in 0..4 {
+            if let Space::Empty = *board.space(r + 1, c + 1) {
+              empty.push((r, c));
+            }
           }
         }
-      }
-      let (r, c) = match thread_rng().choose(&empty) {
-        Some(&(r, c)) => (r, c),
-        None => {
-          println!("No more empty spaces");
-          continue;
-        }
+        let (r, c) = match thread_rng().choose(&empty) {
+          Some(&(r, c)) => (r, c),
+          None => {
+            println!("No more empty spaces");
+            return;
+          }
+        };
+        board.add_card(r + 1, c + 1, card);
+        board.run_battles(r + 1, c + 1);
       };
-      board.add_card(r + 1, c + 1, card);
-      board.run_battles(r + 1, c + 1);
+      do_opponent_turn();
     }
 
     {
@@ -181,49 +184,6 @@ fn main() {
         player_hand = (0..5).map(|_| OwnedCard::blue(random::random_card())).collect();
         opponent_hand = (0..5).map(|_| OwnedCard::red(random::random_card())).collect();
         is_player_turn = thread_rng().gen_weighted_bool(2);
-      }
-
-      ids.grid_spaces.resize(16, &mut ui.widget_id_generator());
-      let mut id_count = 0;
-      for row in 0..4 {
-        for col in 0..4 {
-          let x: f64 = -(ui.window_dim()[0] / 2.0) + (col as f64 * 100.0) + 52.0;
-          let y: f64 = (ui.window_dim()[1] / 2.0) - (row as f64 * 148.0) - 224.0;
-          let button = widget::Button::new();
-          let mut button_id = ids.grid_spaces.get(id_count).unwrap().clone();
-          let (label, arrows, mut button) = match *board.space(row + 1, col + 1) {
-            Space::Block => (String::new(), Vec::new(), button.color(conrod::color::DARK_GRAY)),
-            Space::Card(ref c) => {
-              let (id, arrows, button) = owned_card_to_game_card(&images, button_id, button, c);
-              button_id = id;
-              (c.to_string(), arrows, button)
-            },
-            Space::Empty => (String::new(), Vec::new(), button.color(conrod::color::BLACK))
-          };
-          let label = &label;
-          button = button
-            .label(label)
-            .w_h(100.0, 148.0)
-            .border_color(conrod::color::WHITE)
-            .x_y(x, y);
-          for _click in button.set(button_id, ui) {
-            if let Some(i) = clicked_card {
-              if let Space::Empty = *board.space(row + 1, col + 1) {
-                is_player_turn = false;
-                let card = player_hand.remove(i);
-                board.add_card(row + 1, col + 1, card);
-                board.run_battles(row + 1, col + 1);
-                clicked_card = None;
-              }
-            }
-          }
-          let amount_of_arrows = ids.arrows.len();
-          ids.arrows.resize(amount_of_arrows + arrows.len(), &mut ui.widget_id_generator());
-          for (i, arrow) in arrows.into_iter().enumerate() {
-            arrow.set(ids.arrows.get(amount_of_arrows + i).unwrap().clone(), ui);
-          }
-          id_count += 1;
-        }
       }
 
       ids.cards.resize(player_hand.len(), &mut ui.widget_id_generator());
@@ -266,6 +226,49 @@ fn main() {
         ids.arrows.resize(amount_of_arrows + arrows.len(), &mut ui.widget_id_generator());
         for (i, arrow) in arrows.into_iter().enumerate() {
           arrow.set(ids.arrows.get(amount_of_arrows + i).unwrap().clone(), ui);
+        }
+      }
+
+      ids.grid_spaces.resize(16, &mut ui.widget_id_generator());
+      let mut id_count = 0;
+      for row in 0..4 {
+        for col in 0..4 {
+          let x: f64 = -(ui.window_dim()[0] / 2.0) + (col as f64 * 100.0) + 52.0;
+          let y: f64 = (ui.window_dim()[1] / 2.0) - (row as f64 * 148.0) - 224.0;
+          let button = widget::Button::new();
+          let mut button_id = ids.grid_spaces.get(id_count).unwrap().clone();
+          let (label, arrows, mut button) = match *board.space(row + 1, col + 1) {
+            Space::Block => (String::new(), Vec::new(), button.color(conrod::color::DARK_GRAY)),
+            Space::Card(ref c) => {
+              let (id, arrows, button) = owned_card_to_game_card(&images, button_id, button, c);
+              button_id = id;
+              (c.to_string(), arrows, button)
+            },
+            Space::Empty => (String::new(), Vec::new(), button.color(conrod::color::BLACK))
+          };
+          let label = &label;
+          button = button
+            .label(label)
+            .w_h(100.0, 148.0)
+            .border_color(conrod::color::WHITE)
+            .x_y(x, y);
+          for _click in button.set(button_id, ui) {
+            if let Some(i) = clicked_card {
+              if let Space::Empty = *board.space(row + 1, col + 1) {
+                is_player_turn = false;
+                let card = player_hand.remove(i);
+                board.add_card(row + 1, col + 1, card);
+                board.run_battles(row + 1, col + 1);
+                clicked_card = None;
+              }
+            }
+          }
+          let amount_of_arrows = ids.arrows.len();
+          ids.arrows.resize(amount_of_arrows + arrows.len(), &mut ui.widget_id_generator());
+          for (i, arrow) in arrows.into_iter().enumerate() {
+            arrow.set(ids.arrows.get(amount_of_arrows + i).unwrap().clone(), ui);
+          }
+          id_count += 1;
         }
       }
 
