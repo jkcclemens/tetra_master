@@ -45,11 +45,15 @@ fn main() {
   sink.set_volume(0.8);
 
   let mut display = glium::glutin::WindowBuilder::new()
+    .with_gl(glium::glutin::GlRequest::Latest)
     .with_dimensions(WIDTH, HEIGHT)
     .with_title("Tetra Master");
 
-  #[cfg(not(windows))]
-  { display = display.with_multisampling(4); }
+  display = if cfg!(windows) {
+    display.with_multisampling(0)
+  } else {
+    display.with_multisampling(4)
+  };
   let display = display
     .build_glium()
     .unwrap();
@@ -390,8 +394,7 @@ mod random {
   use tetra_master::*;
   use rand::{thread_rng, Rng};
 
-  /// Get a random card for a player of the given level. Level is between [1, 100] and increases the
-  /// chance of generating better cards the higher it is.
+  /// Get a random card for a player.
   pub fn random_card() -> Card {
     let power = weighted_level();
     let class = match thread_rng().gen_range(0, 100) {
