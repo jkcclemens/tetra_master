@@ -141,7 +141,7 @@ impl TetraMaster {
 #[derive(Debug)]
 pub enum Space {
   Block,
-  Card(OwnedCard),
+  Card(PlacedCard),
   Empty
 }
 
@@ -209,14 +209,14 @@ impl Board {
   }
 
   pub fn add_card(&mut self, row: usize, column: usize, card: OwnedCard) {
-    self.spaces[row - 1][column - 1] = Space::Card(card);
+    self.spaces[row - 1][column - 1] = Space::Card(PlacedCard::new(card, row, column));
   }
 
   pub fn remove_card(&mut self, row: usize, column: usize) -> Option<OwnedCard> {
     let mut space = Space::Empty;
     mem::swap(&mut self.spaces[row - 1][column - 1], &mut space);
     match space {
-      Space::Card(c) => Some(c),
+      Space::Card(c) => Some(c.card),
       _ => None
     }
   }
@@ -235,7 +235,7 @@ impl Board {
   /// Northwest, Northeast, South, Southwest, Southeast.
   ///
   /// If the location isn't a card, an empty vector is returned.
-  pub fn neighbors(&self, row: usize, column: usize) -> Vec<Option<&OwnedCard>> {
+  pub fn neighbors(&self, row: usize, column: usize) -> Vec<Option<&PlacedCard>> {
     if !self.space(row, column).is_card() {
       return Vec::new();
     }
@@ -259,12 +259,28 @@ impl Board {
     cards
   }
 
+  fn do_combo(&self, winner: &PlacedCard, loser: &PlacedCard) {
+    let combos: Vec<&PlacedCard> = self.neighbors(loser.row, loser.column)
+      .into_iter()
+      .enumerate()
+      .filter(|&(_, x)| x.is_some())
+      .map(|(i, x)| (i, x.unwrap()))
+      .filter(|&(_, x)| x.color.get() != winner.color.get())
+      .map(|(i, x)| (loser.arrows.relation_from(i.into(), &x.arrows), x))
+      .filter(|&(ref r, _)| *r != ArrowRelation::Ignore)
+      .map(|(_, x)| x)
+      .collect();
+    for combo in combos {
+      combo.color.set(winner.color.get());
+    }
+  }
+
   pub fn run_battles(&self, row: usize, col: usize) {
     let card = match *self.space(row, col) {
       Space::Card(ref c) => c,
       _ => return
     };
-    let relations: Vec<(ArrowRelation, &OwnedCard)> = self.neighbors(row, col)
+    let relations: Vec<(ArrowRelation, &PlacedCard)> = self.neighbors(row, col)
       .into_iter()
       .enumerate()
       .filter(|&(_, x)| x.is_some())
@@ -272,7 +288,7 @@ impl Board {
       .filter(|&(_, x)| x.color.get() != card.color.get())
       .map(|(i, x)| (card.arrows.relation_from(i.into(), &x.arrows), x))
       .collect();
-    let battles: Vec<&OwnedCard> = relations.iter()
+    let battles: Vec<&PlacedCard> = relations.iter()
       .filter(|&&(ref rel, _)| *rel == ArrowRelation::Battle)
       .map(|&(_, c)| c)
       .collect();
@@ -281,9 +297,11 @@ impl Board {
       match TetraMaster::battle(card, defender) {
         BattleResult::Attacker => {
           defender.color.set(card.color.get());
+          self.do_combo(card, defender);
         },
         BattleResult::Defender => {
           card.color.set(defender.color.get());
+          self.do_combo(defender, card);
           lost_any = true;
           break;
         },
@@ -581,6 +599,31 @@ impl OwnedCard {
 
   pub fn into_inner(self) -> Card {
     self.card
+  }
+}
+
+#[derive(Debug)]
+pub struct PlacedCard {
+  pub card: OwnedCard,
+  pub row: usize,
+  pub column: usize
+}
+
+impl std::ops::Deref for PlacedCard {
+  type Target = OwnedCard;
+
+  fn deref(&self) -> &Self::Target {
+    &self.card
+  }
+}
+
+impl PlacedCard {
+  pub fn new(card: OwnedCard, row: usize, column: usize) -> Self {
+    PlacedCard {
+      card: card,
+      row: row,
+      column: column
+    }
   }
 }
 

@@ -14,7 +14,7 @@ use rand::{thread_rng, Rng};
 
 use rodio::{Sink, Source};
 
-use tetra_master::{Board, Space, OwnedCard, Color as CardColor};
+use tetra_master::{Board, Space, OwnedCard, PlacedCard, Color as CardColor};
 
 use std::fs::File;
 use std::io::BufReader;
@@ -280,7 +280,7 @@ fn main() {
       }
 
       if opponent_hand.is_empty() && player_hand.is_empty() {
-        let cards: Vec<&OwnedCard> = board.spaces
+        let cards: Vec<&PlacedCard> = board.spaces
           .iter()
           .flat_map(|x| x.iter().collect::<Vec<&Space>>())
           .filter(|s| s.is_card())
