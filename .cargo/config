@@ -1,2 +1,2 @@
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-Clink-args=-mwindows"]
+rustflags = ["-Clink-args=-mwindows resources.res"]
