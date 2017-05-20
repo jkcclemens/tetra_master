@@ -121,9 +121,8 @@ fn main() {
         ui_needs_update = true;
       }
 
-      match event {
-        glium::glutin::Event::Closed => break 'main,
-        _ => {}
+      if let glium::glutin::Event::Closed = event {
+        break 'main;
       }
     }
 
@@ -151,7 +150,7 @@ fn main() {
           }
         };
         board.add_card(r + 1, c + 1, card);
-        board.run_battles(r + 1, c + 1);
+        board.run_battles_pos(r + 1, c + 1);
       };
       do_opponent_turn();
     }
@@ -164,7 +163,7 @@ fn main() {
         .border_color(conrod::color::GRAY)
         .bottom_right_with_margins_on(ui.window, 36.0, 16.0)
         .set(ids.volume_slider, ui);
-      for vol in volume_events {
+      if let Some(vol) = volume_events {
         sink.set_volume(vol);
       }
 
@@ -218,7 +217,7 @@ fn main() {
           ),
           _ => panic!("Hand too large")
         };
-        let card_id = ids.cards.get(i).unwrap().clone();
+        let card_id = *ids.cards.get(i).unwrap();
         let label = &card.to_string();
         let (card_id, arrows, mut card_button) = owned_card_to_game_card(&images, card_id, widget::Button::new(), card);
         card_button = card_button
@@ -232,7 +231,7 @@ fn main() {
         let amount_of_arrows = ids.arrows.len();
         ids.arrows.resize(amount_of_arrows + arrows.len(), &mut ui.widget_id_generator());
         for (i, arrow) in arrows.into_iter().enumerate() {
-          arrow.set(ids.arrows.get(amount_of_arrows + i).unwrap().clone(), ui);
+          arrow.set(*ids.arrows.get(amount_of_arrows + i).unwrap(), ui);
         }
       }
 
@@ -243,7 +242,7 @@ fn main() {
           let x: f64 = -(ui.window_dim()[0] / 2.0) + (col as f64 * 100.0) + 52.0;
           let y: f64 = (ui.window_dim()[1] / 2.0) - (row as f64 * 148.0) - 224.0;
           let button = widget::Button::new();
-          let mut button_id = ids.grid_spaces.get(id_count).unwrap().clone();
+          let mut button_id = *ids.grid_spaces.get(id_count).unwrap();
           let (label, arrows, mut button) = match *board.space(row + 1, col + 1) {
             Space::Block => (String::new(), Vec::new(), button.color(conrod::color::DARK_GRAY)),
             Space::Card(ref c) => {
@@ -265,7 +264,7 @@ fn main() {
                 is_player_turn = false;
                 let card = player_hand.remove(i);
                 board.add_card(row + 1, col + 1, card);
-                board.run_battles(row + 1, col + 1);
+                board.run_battles_pos(row + 1, col + 1);
                 clicked_card = None;
               }
             }
@@ -273,7 +272,7 @@ fn main() {
           let amount_of_arrows = ids.arrows.len();
           ids.arrows.resize(amount_of_arrows + arrows.len(), &mut ui.widget_id_generator());
           for (i, arrow) in arrows.into_iter().enumerate() {
-            arrow.set(ids.arrows.get(amount_of_arrows + i).unwrap().clone(), ui);
+            arrow.set(*ids.arrows.get(amount_of_arrows + i).unwrap(), ui);
           }
           id_count += 1;
         }
@@ -289,11 +288,10 @@ fn main() {
             _ => unreachable!()
           })
           .collect();
-        let blue = cards.iter().filter(|x| x.color.get() == CardColor::Blue).count();
-        let red = cards.iter().filter(|x| x.color.get() == CardColor::Red).count();
-        let text = if blue == red {
+        let score = cards.iter().fold(Score::default(), |s, &x| s + x);
+        let text = if score.blue == score.red {
           "Draw"
-        } else if blue > red {
+        } else if score.blue > score.red {
           "Blue wins"
         } else {
           "Red wins"
@@ -327,14 +325,31 @@ fn main() {
   }
 }
 
+#[derive(Debug, Default)]
+struct Score {
+  blue: u8,
+  red: u8
+}
+
+impl<'a> std::ops::Add<&'a PlacedCard> for Score {
+  type Output = Score;
+
+  fn add(mut self, rhs: &'a PlacedCard) -> Score {
+    match rhs.color.get() {
+      CardColor::Blue => self.blue += 1,
+      CardColor::Red => self.red += 1
+    }
+    self
+  }
+}
+
 fn load_image(url: &str, display: &glium::Display) -> glium::texture::Texture2d {
   let assets = find_folder::Search::ParentsThenKids(3, 5).for_folder("assets").unwrap();
   let path = assets.join(url);
   let rgba_image = image::open(&std::path::Path::new(&path)).unwrap().to_rgba();
   let image_dimensions = rgba_image.dimensions();
   let raw_image = glium::texture::RawImage2d::from_raw_rgba_reversed(rgba_image.into_raw(), image_dimensions);
-  let texture = glium::texture::Texture2d::new(display, raw_image).unwrap();
-  texture
+  glium::texture::Texture2d::new(display, raw_image).unwrap()
 }
 
 fn owned_card_to_game_card<'a>(images: &ArrowImages, id: widget::Id, base: widget::Button<'a, widget::button::Flat>, card: &OwnedCard) -> (widget::Id, Vec<widget::Image>, widget::Button<'a, widget::button::Flat>) {

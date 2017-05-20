@@ -187,8 +187,8 @@ impl Board {
   pub fn generate() -> Self {
     let mut slice: [[Space; 4]; 4] = unsafe { [uninitialized(), uninitialized(), uninitialized(), uninitialized()] };
     let mut blocks = 0;
-    for i in 0..4 {
-      slice[i] = Board::generate_row(&mut blocks);
+    for mut spaces in &mut slice {
+      *spaces = Board::generate_row(&mut blocks);
     }
     Board {
       spaces: slice
@@ -197,8 +197,8 @@ impl Board {
 
   fn generate_row(blocks: &mut u8) -> [Space; 4] {
     let mut slice: [Space; 4] = unsafe { [uninitialized(), uninitialized(), uninitialized(), uninitialized()] };
-    for i in 0..4 {
-      slice[i] = if *blocks < 6 && thread_rng().gen_weighted_bool(4) {
+    for mut space in &mut slice {
+      *space = if *blocks < 6 && thread_rng().gen_weighted_bool(4) {
         *blocks += 1;
         Space::Block
       } else {
@@ -208,8 +208,12 @@ impl Board {
     slice
   }
 
-  pub fn add_card(&mut self, row: usize, column: usize, card: OwnedCard) {
+  pub fn add_card(&mut self, row: usize, column: usize, card: OwnedCard) -> &PlacedCard {
     self.spaces[row - 1][column - 1] = Space::Card(PlacedCard::new(card, row, column));
+    match self.spaces[row - 1][column - 1] {
+      Space::Card(ref c) => c,
+      _ => panic!("Another thread changed the card")
+    }
   }
 
   pub fn remove_card(&mut self, row: usize, column: usize) -> Option<OwnedCard> {
@@ -229,13 +233,23 @@ impl Board {
     &mut self.spaces[row - 1][column - 1]
   }
 
+  /// Finds neighboring cards of the given card.
+  ///
+  /// In relation to the given location, the order of the cards returned is West, East, North,
+  /// Northwest, Northeast, South, Southwest, Southeast.
+  ///
+  /// If the location isn't a card, an empty vector is returned.
+  pub fn neighbors(&self, card: &PlacedCard) -> Vec<Option<&PlacedCard>> {
+    self.neighbors_pos(card.row, card.column)
+  }
+
   /// Finds neighboring cards of the card at the given location.
   ///
   /// In relation to the given location, the order of the cards returned is West, East, North,
   /// Northwest, Northeast, South, Southwest, Southeast.
   ///
   /// If the location isn't a card, an empty vector is returned.
-  pub fn neighbors(&self, row: usize, column: usize) -> Vec<Option<&PlacedCard>> {
+  pub fn neighbors_pos(&self, row: usize, column: usize) -> Vec<Option<&PlacedCard>> {
     if !self.space(row, column).is_card() {
       return Vec::new();
     }
@@ -260,7 +274,7 @@ impl Board {
   }
 
   fn do_combo(&self, winner: &PlacedCard, loser: &PlacedCard) {
-    let combos: Vec<&PlacedCard> = self.neighbors(loser.row, loser.column)
+    let combos: Vec<&PlacedCard> = self.neighbors_pos(loser.row, loser.column)
       .into_iter()
       .enumerate()
       .filter(|&(_, x)| x.is_some())
@@ -275,12 +289,16 @@ impl Board {
     }
   }
 
-  pub fn run_battles(&self, row: usize, col: usize) {
+  pub fn run_battles(&self, card: &PlacedCard) {
+    self.run_battles_pos(card.row, card.column)
+  }
+
+  pub fn run_battles_pos(&self, row: usize, col: usize) {
     let card = match *self.space(row, col) {
       Space::Card(ref c) => c,
       _ => return
     };
-    let relations: Vec<(ArrowRelation, &PlacedCard)> = self.neighbors(row, col)
+    let relations: Vec<(ArrowRelation, &PlacedCard)> = self.neighbors_pos(row, col)
       .into_iter()
       .enumerate()
       .filter(|&(_, x)| x.is_some())
@@ -306,7 +324,7 @@ impl Board {
           break;
         },
         BattleResult::Draw => {
-          self.run_battles(row, col);
+          self.run_battles_pos(row, col);
           return;
         }
       }
