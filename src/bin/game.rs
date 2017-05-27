@@ -33,10 +33,17 @@ struct ArrowImages {
 const WIDTH: u32 = 504;
 const HEIGHT: u32 = 744;
 
+fn find_assets() -> std::path::PathBuf {
+  find_folder::Search::KidsThenParents(5, 2)
+  .of(std::env::current_exe().unwrap().parent().unwrap().to_path_buf())
+  .for_folder("assets")
+  .unwrap()
+}
+
 fn main() {
   let endpoint = rodio::get_default_endpoint().unwrap();
 
-  let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+  let assets = find_assets();
   let audio_path = assets.join("audio/Tetra Master loop.ogg");
   let audio = File::open(&audio_path).unwrap();
   let source = rodio::Decoder::new(BufReader::new(audio)).unwrap();
@@ -344,7 +351,7 @@ impl<'a> std::ops::Add<&'a PlacedCard> for Score {
 }
 
 fn load_image(url: &str, display: &glium::Display) -> glium::texture::Texture2d {
-  let assets = find_folder::Search::ParentsThenKids(3, 5).for_folder("assets").unwrap();
+  let assets = find_assets();
   let path = assets.join(url);
   let rgba_image = image::open(&std::path::Path::new(&path)).unwrap().to_rgba();
   let image_dimensions = rgba_image.dimensions();

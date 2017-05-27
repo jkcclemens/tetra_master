@@ -5,7 +5,7 @@ authors = ["Kyle Clemens <jkc.clemens@gmail.com>"]
 
 [dependencies]
 rand = "0.3"
-conrod = { version ="0.52", features = ["winit", "glium"] }
+conrod = { version = "0.52", features = ["winit", "glium"] }
 find_folder = "0.3"
 rodio = "0.5"
 image = "0.13"
